@@ -1,6 +1,15 @@
 import os
+import logging
 import httpx
+from pathlib import Path
 from dotenv import load_dotenv
+
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+)
+
+load_dotenv(Path(__file__).parent.parent / ".env")
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -12,7 +21,6 @@ from telegram.ext import (
     ContextTypes,
 )
 
-load_dotenv()
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 
@@ -203,7 +211,11 @@ def main():
         fallbacks=[CommandHandler("cancel", cancel)],
     )
 
+    async def error_handler(update, context):
+        logging.error("Ошибка: %s", context.error, exc_info=context.error)
+
     app.add_handler(conv)
+    app.add_error_handler(error_handler)
     print("Бот запущен...")
     app.run_polling()
 

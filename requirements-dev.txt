@@ -1,0 +1,6 @@
+-r requirements.txt
+matplotlib
+seaborn
+plotly
+scipy
+jupyterlab

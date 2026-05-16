@@ -66,16 +66,28 @@ jupyter lab
 
 ## Запуск
 
-Открыть **два терминала** (оба с активированным venv):
+Нужно открыть **два терминала**. В каждом сначала активировать venv:
+
+```bash
+source venv/bin/activate        # macOS / Linux
+# venv\Scripts\activate         # Windows
+```
 
 ### Терминал 1 — Backend (FastAPI)
 
+Важно: команду нужно запускать **из папки `krisha_elo`**, не из `backend/`.
+
 ```bash
-cd backend
-uvicorn main:app --reload
+# Убедитесь что вы в папке krisha_elo
+pwd   # должно показать .../krisha_elo
+
+uvicorn backend.main:app --reload
 ```
 
-API будет доступен на `http://localhost:8000`
+Дождитесь сообщения:
+```
+INFO:     Uvicorn running on http://127.0.0.1:8000
+```
 
 ### Терминал 2 — Telegram бот
 
@@ -84,7 +96,14 @@ cd bot
 python bot.py
 ```
 
-Найдите вашего бота в Telegram и отправьте `/start`.
+Дождитесь сообщения:
+```
+Бот запущен...
+```
+
+Откройте Telegram, найдите вашего бота и отправьте `/start`.
+
+> ⚠️ Backend должен быть запущен **до** того как бот попытается посчитать цену.
 
 ---
 
