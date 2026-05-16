@@ -50,10 +50,13 @@ jupyter lab
 
 ```
 krisha_elo/
-├── astana_botagoz_git.ipynb   # основной ноутбук
-├── requirements.txt           # зависимости
-├── dt_model.pkl               # сохранённая модель (после запуска ноутбука)
-└── README.md                  # этот файл
+├── astana_botagoz_git.ipynb         # основной ноутбук
+├── krisha_data.csv                  # исходные данные с krisha.kz
+├── new_features_of_krisha_data.csv  # данные после feature engineering
+├── dt_model.pkl                     # сохранённая модель (после запуска ноутбука)
+├── requirements.txt                 # зависимости
+├── .gitignore                       # исключения для git
+└── README.md                        # этот файл
 ```
 
 ---
