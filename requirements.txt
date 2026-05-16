@@ -5,6 +5,5 @@ matplotlib
 seaborn
 plotly
 scipy
-catboost
 jupyterlab
 joblib
