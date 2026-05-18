@@ -7,6 +7,7 @@ from bot.bot import build_app
 
 async def main():
     port = int(os.getenv("PORT", 8000))
+    os.environ["API_URL"] = f"http://localhost:{port}"
 
     config = uvicorn.Config(app, host="0.0.0.0", port=port)
     server = uvicorn.Server(config)

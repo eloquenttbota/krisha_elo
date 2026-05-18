@@ -22,7 +22,10 @@ from telegram.ext import (
 )
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-API_URL = os.getenv("API_URL", "http://localhost:8000")
+
+
+def get_api_url() -> str:
+    return os.getenv("API_URL", "http://localhost:8000")
 
 (
     AREA, ROOMS, FLOOR, FLOOR_COUNT,
@@ -168,7 +171,7 @@ async def get_owner(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     payload = ctx.user_data.copy()
     try:
         async with httpx.AsyncClient() as client:
-            resp = await client.post(f"{API_URL}/predict", json=payload, timeout=10)
+            resp = await client.post(f"{get_api_url()}/predict", json=payload, timeout=10)
             resp.raise_for_status()
             result = resp.json()
         price_m2 = f"{result['price_per_m2']:,}".replace(",", " ")
