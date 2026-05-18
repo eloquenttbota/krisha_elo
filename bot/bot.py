@@ -131,11 +131,12 @@ async def ask(update_or_query, text: str, keyboard=None, parse_mode="Markdown"):
 
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     ctx.user_data.clear()
-    msg = update.message or (update.callback_query and update.callback_query.message)
-    await msg.reply_text(
-        "🏠 *Оценка квартиры в Астане*\n\nОтвечайте на вопросы — я рассчитаю стоимость.\n\n" + PROMPTS[AREA],
-        parse_mode="Markdown",
-    )
+    text = "🏠 *Оценка квартиры в Астане*\n\nОтвечайте на вопросы — я рассчитаю стоимость.\n\n" + PROMPTS[AREA]
+    if update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.message.reply_text(text, parse_mode="Markdown")
+    else:
+        await update.message.reply_text(text, parse_mode="Markdown")
     return AREA
 
 
@@ -333,7 +334,10 @@ def build_app() -> Application:
     back_filter = filters.TEXT & ~filters.COMMAND
 
     conv = ConversationHandler(
-        entry_points=[CommandHandler("start", start)],
+        entry_points=[
+            CommandHandler("start", start),
+            CallbackQueryHandler(start, pattern="^restart$"),
+        ],
         states={
             AREA:        [MessageHandler(back_filter, get_area),        CallbackQueryHandler(handle_back, pattern="^back$")],
             ROOMS:       [MessageHandler(back_filter, get_rooms),       CallbackQueryHandler(handle_back, pattern="^back$")],
@@ -348,12 +352,7 @@ def build_app() -> Application:
         fallbacks=[CommandHandler("cancel", cancel), CommandHandler("start", start)],
     )
 
-    async def restart_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-        await update.callback_query.answer()
-        return await start(update, ctx)
-
     bot_app.add_handler(conv)
-    bot_app.add_handler(CallbackQueryHandler(restart_handler, pattern="^restart$"))
     bot_app.add_error_handler(error_handler)
     return bot_app
 
