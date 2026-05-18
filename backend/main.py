@@ -4,7 +4,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from preprocess import build_features, DISTRICTS, HOUSE_TYPES
+from backend.preprocess import build_features, DISTRICTS, HOUSE_TYPES
 
 BASE = Path(__file__).parent.parent
 MODEL_PATH = BASE / "dt_model.pkl"
