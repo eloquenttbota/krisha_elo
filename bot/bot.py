@@ -57,7 +57,13 @@ DISTRICT_DISTANCE = {
 }
 
 DISTRICTS = list(DISTRICT_DISTANCE.keys())
-HOUSE_TYPES = ["монолитный дом", "панельный дом", "кирпичный дом", "другой"]
+HOUSE_TYPES = ["монолитный", "панельный", "кирпичный", "другой"]
+HOUSE_TYPE_MAP = {
+    "монолитный": "монолитный дом",
+    "панельный":  "панельный дом",
+    "кирпичный":  "кирпичный дом",
+    "другой":     "",
+}
 
 (
     AREA, ROOMS, FLOOR, FLOOR_COUNT,
@@ -66,21 +72,21 @@ HOUSE_TYPES = ["монолитный дом", "панельный дом", "ки
 
 # Вопросы и подсказки для каждого шага
 PROMPTS = {
-    AREA:        "Введите площадь квартиры в м²:\n_Пример: 65 или 65.5 (от 10 до 500 м²)_",
-    ROOMS:       "Количество комнат:\n_Пример: 2 (от 1 до 10)_",
-    FLOOR:       "На каком этаже квартира?\n_Пример: 5 (от 1 до 100)_",
-    FLOOR_COUNT: "Сколько этажей в доме?\n_Пример: 9 (от 1 до 100)_",
-    YEAR:        "Год постройки дома:\n_Пример: 2010 (от 1950 до 2025)_",
-    CEILING:     "Высота потолков в метрах:\n_Пример: 2.7 (от 1.5 до 6.0)_",
+    AREA:        "📐 *Площадь квартиры* — в м²\n_от 10 до 500_",
+    ROOMS:       "🚪 *Количество комнат*\n_от 1 до 10_",
+    FLOOR:       "🏢 *Этаж квартиры*\n_от 1 до 27_",
+    FLOOR_COUNT: "🏗 *Этажей в доме*\n_от 2 до 27_",
+    YEAR:        "📅 *Год постройки*\n_от 1950 до 2025_",
+    CEILING:     "📏 *Высота потолков* — в метрах\n_от 2.5 до 4.0_",
 }
 
 ERRORS = {
-    AREA:        "⚠️ Площадь должна быть числом от *10 до 500* м²\nПример: *65* или *65.5*",
-    ROOMS:       "⚠️ Введите целое число от *1 до 10*\nПример: *2*",
-    FLOOR:       "⚠️ Введите целое число от *1 до 100*\nПример: *5*",
-    FLOOR_COUNT: "⚠️ Этажей в доме должно быть от *{floor} до 100*\nПример: *9*",
-    YEAR:        "⚠️ Введите год от *1950 до 2025*\nПример: *2010*",
-    CEILING:     "⚠️ Высота потолков от *1.5 до 6.0* метров\nПример: *2.7*",
+    AREA:        "⚠️ Введите число от *10 до 500*\n_например: 65 или 65.5_",
+    ROOMS:       "⚠️ Введите число от *1 до 10*\n_например: 3_",
+    FLOOR:       "⚠️ Введите число от *1 до 27*\n_например: 5_",
+    FLOOR_COUNT: "⚠️ Этажей должно быть от *{floor} до 27*\n_например: 9_",
+    YEAR:        "⚠️ Введите год от *1950 до 2025*\n_например: 2010_",
+    CEILING:     "⚠️ Высота от *2.5 до 4.0* метров\n_например: 2.7_",
 }
 
 PREV_STATE = {
@@ -96,14 +102,21 @@ PREV_STATE = {
 
 
 def back_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[InlineKeyboardButton("← Назад", callback_data="back")]])
+    return InlineKeyboardMarkup([[InlineKeyboardButton("‹ Назад", callback_data="back")]])
 
 
-def choice_keyboard(options: list[str], with_back: bool = True) -> InlineKeyboardMarkup:
-    buttons = [[InlineKeyboardButton(o, callback_data=o)] for o in options]
+def choice_keyboard(options: list[str], with_back: bool = True, columns: int = 2) -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton(options[i + j], callback_data=options[i + j]) for j in range(columns) if i + j < len(options)]
+        for i in range(0, len(options), columns)
+    ]
     if with_back:
-        buttons.append([InlineKeyboardButton("← Назад", callback_data="back")])
-    return InlineKeyboardMarkup(buttons)
+        rows.append([InlineKeyboardButton("‹ Назад", callback_data="back")])
+    return InlineKeyboardMarkup(rows)
+
+
+def restart_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Оценить другую квартиру", callback_data="restart")]])
 
 
 async def ask(update_or_query, text: str, keyboard=None, parse_mode="Markdown"):
@@ -118,8 +131,9 @@ async def ask(update_or_query, text: str, keyboard=None, parse_mode="Markdown"):
 
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     ctx.user_data.clear()
-    await update.message.reply_text(
-        "Привет! Я предскажу цену квартиры в Астане 🏠\n\n" + PROMPTS[AREA],
+    msg = update.message or (update.callback_query and update.callback_query.message)
+    await msg.reply_text(
+        "🏠 *Оценка квартиры в Астане*\n\nОтвечайте на вопросы — я рассчитаю стоимость.\n\n" + PROMPTS[AREA],
         parse_mode="Markdown",
     )
     return AREA
@@ -175,7 +189,7 @@ async def get_floor(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     ctx.user_data["_state"] = FLOOR
     try:
         val = clean_int(update.message.text)
-        assert 1 <= val <= 100
+        assert 1 <= val <= 27
         ctx.user_data["floor"] = val
     except (ValueError, AssertionError):
         await update.message.reply_text(ERRORS[FLOOR], reply_markup=back_keyboard(), parse_mode="Markdown")
@@ -190,7 +204,7 @@ async def get_floor_count(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
     floor = ctx.user_data.get("floor", 1)
     try:
         val = clean_int(update.message.text)
-        assert floor <= val <= 100
+        assert floor <= val <= 27
         ctx.user_data["floor_count"] = val
     except (ValueError, AssertionError):
         msg = ERRORS[FLOOR_COUNT].format(floor=floor)
@@ -219,7 +233,7 @@ async def get_ceiling(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     ctx.user_data["_state"] = CEILING
     try:
         val = clean_float(update.message.text)
-        assert 1.5 <= val <= 6.0
+        assert 2.5 <= val <= 4.0
         ctx.user_data["ceiling_height"] = val
     except (ValueError, AssertionError):
         await update.message.reply_text(ERRORS[CEILING], reply_markup=back_keyboard(), parse_mode="Markdown")
@@ -256,7 +270,7 @@ async def get_house_type(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if query.data == "back":
         return await handle_back(update, ctx)
     val = query.data
-    ctx.user_data["house_type"] = "" if val == "другой" else val
+    ctx.user_data["house_type"] = HOUSE_TYPE_MAP.get(val, "")
     ctx.user_data["_state"] = OWNER
     await query.edit_message_text(
         f"Тип дома: *{val}*\n\nКто продаёт квартиру?",
@@ -283,13 +297,17 @@ async def get_owner(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         price_m2 = f"{result['price_per_m2']:,}".replace(",", " ")
         total = f"{result['total_price']:,}".replace(",", " ")
         area = ctx.user_data.get("area", 0)
+        district = ctx.user_data.get("district", "—") or "другой"
         await query.message.reply_text(
-            f"*Прогноз цены квартиры:*\n\n"
+            f"✅ *Результат оценки*\n"
+            f"{'─' * 22}\n"
+            f"📍 Район: {district}\n"
             f"📐 Площадь: {area} м²\n"
+            f"{'─' * 22}\n"
             f"💰 Цена за м²: *{price_m2} ₸*\n"
-            f"🏠 Общая стоимость: *{total} ₸*\n\n"
-            f"Чтобы оценить другую квартиру — /start",
+            f"🏠 Итого: *{total} ₸*",
             parse_mode="Markdown",
+            reply_markup=restart_keyboard(),
         )
     except Exception as e:
         logging.error("Predict error: %s", e)
@@ -330,7 +348,12 @@ def build_app() -> Application:
         fallbacks=[CommandHandler("cancel", cancel), CommandHandler("start", start)],
     )
 
+    async def restart_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        await update.callback_query.answer()
+        return await start(update, ctx)
+
     bot_app.add_handler(conv)
+    bot_app.add_handler(CallbackQueryHandler(restart_handler, pattern="^restart$"))
     bot_app.add_error_handler(error_handler)
     return bot_app
 
