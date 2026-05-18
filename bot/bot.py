@@ -72,8 +72,8 @@ HOUSE_TYPE_MAP = {
 
 # Вопросы и подсказки для каждого шага
 PROMPTS = {
-    AREA:        "📐 *Площадь квартиры* — в м²\n_от 10 до 500_",
-    ROOMS:       "🚪 *Количество комнат*\n_от 1 до 10_",
+    AREA:        "📐 *Площадь квартиры* — в м²\n_от 15 до 300_",
+    ROOMS:       "🚪 *Количество комнат*\n_от 1 до 7_",
     FLOOR:       "🏢 *Этаж квартиры*\n_от 1 до 27_",
     FLOOR_COUNT: "🏗 *Этажей в доме*\n_от 2 до 27_",
     YEAR:        "📅 *Год постройки*\n_от 1950 до 2025_",
@@ -81,8 +81,8 @@ PROMPTS = {
 }
 
 ERRORS = {
-    AREA:        "⚠️ Введите число от *10 до 500*\n_например: 65 или 65.5_",
-    ROOMS:       "⚠️ Введите число от *1 до 10*\n_например: 3_",
+    AREA:        "⚠️ Введите число от *15 до 300*\n_например: 65 или 65.5_",
+    ROOMS:       "⚠️ Введите число от *1 до 7*\n_например: 3_",
     FLOOR:       "⚠️ Введите число от *1 до 27*\n_например: 5_",
     FLOOR_COUNT: "⚠️ Этажей должно быть от *{floor} до 27*\n_например: 9_",
     YEAR:        "⚠️ Введите год от *1950 до 2025*\n_например: 2010_",
@@ -161,7 +161,7 @@ async def get_area(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     ctx.user_data["_state"] = AREA
     try:
         val = clean_float(update.message.text)
-        assert 10 <= val <= 500
+        assert 15 <= val <= 300
         ctx.user_data["area"] = val
     except (ValueError, AssertionError):
         await update.message.reply_text(ERRORS[AREA], reply_markup=back_keyboard(), parse_mode="Markdown")
@@ -175,7 +175,7 @@ async def get_rooms(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     ctx.user_data["_state"] = ROOMS
     try:
         val = clean_int(update.message.text)
-        assert 1 <= val <= 10
+        assert 1 <= val <= 7
         ctx.user_data["room_count"] = val
     except (ValueError, AssertionError):
         await update.message.reply_text(ERRORS[ROOMS], reply_markup=back_keyboard(), parse_mode="Markdown")
