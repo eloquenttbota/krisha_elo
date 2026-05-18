@@ -191,8 +191,8 @@ async def cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 
-def main():
-    app = Application.builder().token(TOKEN).build()
+def build_app() -> Application:
+    bot_app = Application.builder().token(TOKEN).build()
 
     conv = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
@@ -214,10 +214,15 @@ def main():
     async def error_handler(update, context):
         logging.error("Ошибка: %s", context.error, exc_info=context.error)
 
-    app.add_handler(conv)
-    app.add_error_handler(error_handler)
+    bot_app.add_handler(conv)
+    bot_app.add_error_handler(error_handler)
+    return bot_app
+
+
+def main():
+    bot_app = build_app()
     print("Бот запущен...")
-    app.run_polling()
+    bot_app.run_polling()
 
 
 if __name__ == "__main__":
