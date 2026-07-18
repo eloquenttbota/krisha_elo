@@ -1,19 +1,35 @@
+"""Строит вектор признаков для одного объявления — зеркало пайплайна
+feature engineering из ноутбука (src/feature_engineering.py), но без
+восстановления пропусков: пользователь бота вводит все значения явно,
+поэтому все *_was_missing флаги всегда равны 0.
+"""
 import numpy as np
 import pandas as pd
 
-
+# Категории, реально присутствующие в обучающих данных (после clean_district).
 DISTRICTS = [
     "Есильский р-н",
     "Нура р-н",
-    "Сарайшык р-н",
+    "Алматы р-н",
     "Сарыарка р-н",
+    "Сарайшык р-н",
     "р-н Байконур",
 ]
 
 HOUSE_TYPES = [
-    "монолитный дом",
-    "панельный дом",
+    "монолитный",
+    "кирпичный",
+    "панельный",
+    "иной",
 ]
+
+# OneHotEncoder(drop="first") в ноутбуке отбрасывает первую по алфавиту
+# категорию как базовую — у district это "Алматы р-н", у house_type "иной".
+DISTRICT_OHE = [d for d in DISTRICTS if d != "Алматы р-н"]
+HOUSE_TYPE_OHE = [h for h in HOUSE_TYPES if h != "иной"]
+
+# Самый дорогой район по медианной цене/м² (определено в EDA ноутбука).
+PREMIUM_DISTRICT = "Есильский р-н"
 
 
 def get_year_category(year: int) -> int:
@@ -44,49 +60,47 @@ def build_features(
     district: str,
     house_type: str,
     owner: str,
+    in_complex: bool,
     feature_names: list[str],
 ) -> pd.DataFrame:
     year_category = get_year_category(construction_year)
     is_high_ceiling = int(ceiling_height >= 3.0)
-    owner_enc = int(owner == "Хозяин")
+    owner_direct = int(owner == "Хозяин")
 
-    district_cols = {f"district_{d}": int(district == d) for d in DISTRICTS}
-    house_type_cols = {f"house_type_{h}": int(house_type == h) for h in HOUSE_TYPES}
+    premium_factor = is_high_ceiling * int(district == PREMIUM_DISTRICT)
+    economy_old_panel = int(year_category <= 3 and house_type == "панельный")
 
     floor_bin = pd.cut([floor], bins=[0, 1, 5, 15, 100], labels=[0, 1, 2, 3], include_lowest=True)[0]
-    area_bin = pd.cut([area], bins=[0, 45, 70, 100, 9999], labels=[0, 1, 2, 3], include_lowest=True)[0]
+    floor_ratio = floor / floor_count if floor_count else 0.0
+
+    district_cols = {f"district_{d}": int(district == d) for d in DISTRICT_OHE}
+    house_type_cols = {f"house_type_{h}": int(house_type == h) for h in HOUSE_TYPE_OHE}
 
     row = {
+        "ceiling_height": ceiling_height,
         "area": area,
         "room_count": room_count,
-        "floor ": floor,
+        "floor": floor,
         "floor_count": floor_count,
+        "owner_direct": owner_direct,
+        "in_complex": int(in_complex),
+        "ceiling_height_was_missing": 0,
+        "house_type_was_missing": 0,
+        "floor_count_was_missing": 0,
         "distance_to_center": distance_to_center,
-        "owner_enc": owner_enc,
         "year_category": year_category,
-        "is_high_ceiling": is_high_ceiling,
-        **district_cols,
-        **house_type_cols,
-        "premium_factor": is_high_ceiling * district_cols.get("district_Есильский р-н", 0),
-        "economy_old_panel": int(year_category <= 3) * house_type_cols.get("house_type_панельный дом", 0),
-        "log_distance": np.log1p(distance_to_center),
-        "area_per_room": area / room_count if room_count > 0 else area,
+        "premium_factor": premium_factor,
+        "economy_old_panel": economy_old_panel,
         "floor_bin": int(floor_bin),
-        "area_bin": int(area_bin),
-        "floor_ratio_x_ceiling": (floor / floor_count) * is_high_ceiling if floor_count > 0 else 0,
-        "area_x_year": area * year_category,
-        "rooms_x_year": room_count * year_category,
-        "floor_ratio": floor / floor_count if floor_count > 0 else 0,
+        "floor_ratio": floor_ratio,
         "is_top_floor": int(floor == floor_count),
         "is_ground_floor": int(floor == 1),
-        "log_area": np.log1p(area),
-        "area_squared": area ** 2,
-        "area_x_rooms": area * room_count,
-        "distance_x_district_esilsky": distance_to_center * district_cols.get("district_Есильский р-н", 0),
+        **district_cols,
+        **house_type_cols,
     }
 
     df = pd.DataFrame([row])
-    # Оставляем только те признаки, которые использовала модель
+    # Оставляем только те признаки, которые использовала модель, в её порядке
     for col in feature_names:
         if col not in df.columns:
             df[col] = 0

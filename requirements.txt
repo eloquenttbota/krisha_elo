@@ -4,6 +4,7 @@ python-telegram-bot
 httpx
 python-dotenv
 scikit-learn
+xgboost
 numpy
 pandas
 joblib

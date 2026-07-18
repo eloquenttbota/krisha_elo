@@ -46,47 +46,42 @@ def clean_int(text: str) -> int:
     return int(t)
 
 
-# Приблизительное расстояние до центра по районам (км)
+# Медианное расстояние до центра по районам (км) — посчитано из реальных
+# координат объявлений в ноутбуке (src/geo.py + krysha_astana_160726.csv).
 DISTRICT_DISTANCE = {
-    "Есильский р-н":  3.5,
-    "Нура р-н":       10.0,
-    "Сарайшык р-н":   12.0,
-    "Сарыарка р-н":    6.0,
-    "р-н Байконур":    8.0,
-    "Другой":          7.0,
+    "Есильский р-н":  3.4,
+    "Нура р-н":       4.1,
+    "р-н Байконур":   4.2,
+    "Алматы р-н":     4.4,
+    "Сарайшык р-н":   5.3,
+    "Сарыарка р-н":   5.9,
 }
 
 DISTRICTS = list(DISTRICT_DISTANCE.keys())
-HOUSE_TYPES = ["монолитный", "панельный", "кирпичный", "другой"]
-HOUSE_TYPE_MAP = {
-    "монолитный": "монолитный дом",
-    "панельный":  "панельный дом",
-    "кирпичный":  "кирпичный дом",
-    "другой":     "",
-}
+HOUSE_TYPES = ["монолитный", "кирпичный", "панельный", "иной"]
 
 (
     AREA, ROOMS, FLOOR, FLOOR_COUNT,
-    YEAR, CEILING, DISTRICT, HOUSE_TYPE, OWNER,
-) = range(9)
+    YEAR, CEILING, DISTRICT, HOUSE_TYPE, OWNER, IN_COMPLEX,
+) = range(10)
 
 # Вопросы и подсказки для каждого шага
 PROMPTS = {
     AREA:        "📐 *Площадь квартиры* — в м²\n_от 15 до 300_",
     ROOMS:       "🚪 *Количество комнат*\n_от 1 до 7_",
-    FLOOR:       "🏢 *Этаж квартиры*\n_от 1 до 27_",
-    FLOOR_COUNT: "🏗 *Этажей в доме*\n_от 2 до 27_",
-    YEAR:        "📅 *Год постройки*\n_от 1950 до 2025_",
-    CEILING:     "📏 *Высота потолков* — в метрах\n_от 2.5 до 4.0_",
+    FLOOR:       "🏢 *Этаж квартиры*\n_от 1 до 40_",
+    FLOOR_COUNT: "🏗 *Этажей в доме*\n_от 2 до 40_",
+    YEAR:        "📅 *Год постройки*\n_от 1960 до 2028_",
+    CEILING:     "📏 *Высота потолков* — в метрах\n_от 2.3 до 4.2_",
 }
 
 ERRORS = {
     AREA:        "⚠️ Введите число от *15 до 300*\n_например: 65 или 65.5_",
     ROOMS:       "⚠️ Введите число от *1 до 7*\n_например: 3_",
-    FLOOR:       "⚠️ Введите число от *1 до 27*\n_например: 5_",
-    FLOOR_COUNT: "⚠️ Этажей должно быть от *{floor} до 27*\n_например: 9_",
-    YEAR:        "⚠️ Введите год от *1950 до 2025*\n_например: 2010_",
-    CEILING:     "⚠️ Высота от *2.5 до 4.0* метров\n_например: 2.7_",
+    FLOOR:       "⚠️ Введите число от *1 до 40*\n_например: 5_",
+    FLOOR_COUNT: "⚠️ Этажей должно быть от *{floor} до 40*\n_например: 9_",
+    YEAR:        "⚠️ Введите год от *1960 до 2028*\n_например: 2010_",
+    CEILING:     "⚠️ Высота от *2.3 до 4.2* метров\n_например: 2.7_",
 }
 
 PREV_STATE = {
@@ -98,6 +93,7 @@ PREV_STATE = {
     DISTRICT:    CEILING,
     HOUSE_TYPE:  DISTRICT,
     OWNER:       HOUSE_TYPE,
+    IN_COMPLEX:  OWNER,
 }
 
 
@@ -190,7 +186,7 @@ async def get_floor(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     ctx.user_data["_state"] = FLOOR
     try:
         val = clean_int(update.message.text)
-        assert 1 <= val <= 27
+        assert 1 <= val <= 40
         ctx.user_data["floor"] = val
     except (ValueError, AssertionError):
         await update.message.reply_text(ERRORS[FLOOR], reply_markup=back_keyboard(), parse_mode="Markdown")
@@ -205,7 +201,7 @@ async def get_floor_count(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
     floor = ctx.user_data.get("floor", 1)
     try:
         val = clean_int(update.message.text)
-        assert floor <= val <= 27
+        assert floor <= val <= 40
         ctx.user_data["floor_count"] = val
     except (ValueError, AssertionError):
         msg = ERRORS[FLOOR_COUNT].format(floor=floor)
@@ -220,7 +216,7 @@ async def get_year(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     ctx.user_data["_state"] = YEAR
     try:
         val = clean_int(update.message.text)
-        assert 1950 <= val <= 2025
+        assert 1960 <= val <= 2028
         ctx.user_data["construction_year"] = val
     except (ValueError, AssertionError):
         await update.message.reply_text(ERRORS[YEAR], reply_markup=back_keyboard(), parse_mode="Markdown")
@@ -234,7 +230,7 @@ async def get_ceiling(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     ctx.user_data["_state"] = CEILING
     try:
         val = clean_float(update.message.text)
-        assert 2.5 <= val <= 4.0
+        assert 2.3 <= val <= 4.2
         ctx.user_data["ceiling_height"] = val
     except (ValueError, AssertionError):
         await update.message.reply_text(ERRORS[CEILING], reply_markup=back_keyboard(), parse_mode="Markdown")
@@ -254,7 +250,7 @@ async def get_district(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if query.data == "back":
         return await handle_back(update, ctx)
     val = query.data
-    ctx.user_data["district"] = "" if val == "Другой" else val
+    ctx.user_data["district"] = val
     ctx.user_data["distance_to_center"] = DISTRICT_DISTANCE[val]
     ctx.user_data["_state"] = HOUSE_TYPE
     await query.edit_message_text(
@@ -271,7 +267,7 @@ async def get_house_type(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if query.data == "back":
         return await handle_back(update, ctx)
     val = query.data
-    ctx.user_data["house_type"] = HOUSE_TYPE_MAP.get(val, "")
+    ctx.user_data["house_type"] = val
     ctx.user_data["_state"] = OWNER
     await query.edit_message_text(
         f"Тип дома: *{val}*\n\nКто продаёт квартиру?",
@@ -287,6 +283,21 @@ async def get_owner(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if query.data == "back":
         return await handle_back(update, ctx)
     ctx.user_data["owner"] = query.data
+    ctx.user_data["_state"] = IN_COMPLEX
+    await query.edit_message_text(
+        f"Продавец: *{query.data}*\n\nКвартира в жилом комплексе (ЖК)?",
+        reply_markup=choice_keyboard(["Да", "Нет"]),
+        parse_mode="Markdown",
+    )
+    return IN_COMPLEX
+
+
+async def get_in_complex(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    if query.data == "back":
+        return await handle_back(update, ctx)
+    ctx.user_data["in_complex"] = query.data == "Да"
     await query.edit_message_text("Считаю цену... ⏳")
 
     payload = {k: v for k, v in ctx.user_data.items() if not k.startswith("_")}
@@ -298,7 +309,7 @@ async def get_owner(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         price_m2 = f"{result['price_per_m2']:,}".replace(",", " ")
         total = f"{result['total_price']:,}".replace(",", " ")
         area = ctx.user_data.get("area", 0)
-        district = ctx.user_data.get("district", "—") or "другой"
+        district = ctx.user_data.get("district", "—")
         await query.message.reply_text(
             f"✅ *Результат оценки*\n"
             f"{'─' * 22}\n"
@@ -348,6 +359,7 @@ def build_app() -> Application:
             DISTRICT:    [CallbackQueryHandler(get_district)],
             HOUSE_TYPE:  [CallbackQueryHandler(get_house_type)],
             OWNER:       [CallbackQueryHandler(get_owner)],
+            IN_COMPLEX:  [CallbackQueryHandler(get_in_complex)],
         },
         fallbacks=[CommandHandler("cancel", cancel), CommandHandler("start", start)],
     )

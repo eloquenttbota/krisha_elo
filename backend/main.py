@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from backend.preprocess import build_features, DISTRICTS, HOUSE_TYPES
 
 BASE = Path(__file__).parent.parent
-MODEL_PATH = BASE / "dt_model.pkl"
+MODEL_PATH = BASE / "model.pkl"
 FEATURES_PATH = BASE / "feature_names.pkl"
 
 app = FastAPI(title="Krisha Price Predictor")
@@ -21,12 +21,13 @@ class ApartmentInput(BaseModel):
     room_count: int = Field(..., ge=1, le=10)
     floor: int = Field(..., ge=1)
     floor_count: int = Field(..., ge=1)
-    construction_year: int = Field(..., ge=1950, le=2025)
-    ceiling_height: float = Field(default=2.7, gt=1.5, le=6.0)
+    construction_year: int = Field(..., ge=1960, le=2028)
+    ceiling_height: float = Field(default=2.7, ge=2.3, le=4.2)
     distance_to_center: float = Field(..., gt=0, description="Расстояние до центра, км")
     district: str
     house_type: str
     owner: str = Field(..., pattern="^(Хозяин|Агентство)$")
+    in_complex: bool = Field(default=False, description="Квартира в жилом комплексе (ЖК)")
 
 
 class PredictionResponse(BaseModel):
@@ -60,6 +61,7 @@ def predict(data: ApartmentInput):
         district=data.district,
         house_type=data.house_type,
         owner=data.owner,
+        in_complex=data.in_complex,
         feature_names=feature_names,
     )
 
