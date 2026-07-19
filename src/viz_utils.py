@@ -86,7 +86,7 @@ def hypothesis_result(tag: str, text: str, stat_name: str, stat_value: float,
     return confirmed
 
 
-def show_qr_code(path: str, caption: str, size: int = 180) -> None:
+def show_qr_code(path: str, caption: str, size: int = 300) -> None:
     """Показывает QR-код с подписью, если файл уже лежит в директории проекта.
     Пока файла нет — аккуратная заглушка с именем, которое нужно положить рядом."""
     if not os.path.exists(path):
