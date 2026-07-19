@@ -226,9 +226,7 @@ def evaluate_model(model, X_test, y_test, name: str, colors: dict) -> dict:
         f"{name}: итоговая метрика на test",
         rows=[("MAPE", f"{metrics['mape']:.1f}%")],
         note="MAPE — средняя ошибка модели в процентах от реальной цены: "
-             "«в среднем модель промахивается на N% от того, сколько квартира стоит на самом деле». "
-             "Это одно и то же число что для цены за м², что для полной стоимости квартиры — "
-             "ошибка в процентах не меняется при умножении на площадь.",
+             "«в среднем модель промахивается на N% от того, сколько квартира стоит на самом деле». ",
         accent=colors["primary"],
     )
     return metrics
@@ -237,38 +235,36 @@ def evaluate_model(model, X_test, y_test, name: str, colors: dict) -> dict:
 # ─── Как на самом деле выглядят предсказания деревьев (не как в линейной регрессии) ─
 
 def plot_predictions_grid(models: dict, X_test, y_test, colors: dict) -> None:
-    """Объекты test отсортированы по реальной цене (серая линия), поверх —
-    предсказания моделей. У Decision Tree/Random Forest/XGBoost предсказание
-    — не гладкая прямая, а конечный набор значений (листья деревьев), поэтому
-    линия предсказаний выглядит «ступеньками», а не диагональю как у линейной
-    регрессии. Одинаковый масштаб по Y — модели сравнимы напрямую."""
+    """Дерево решений физически не может предсказать больше значений, чем у
+    него листьев — множество разных квартир получают ОДНО и то же число.
+    Обычный scatter «предсказание vs реальность» на тысячах точек эту
+    дискретность не показывает (точки сливаются в облако вдоль диагонали
+    для любой модели, включая линейную регрессию). Гистограмма — честнее:
+    у Decision Tree предсказания собираются в редких, но высоких «пиках»
+    (много объектов делят одно и то же значение листа), а у Random Forest
+    и XGBoost — благодаря усреднению сотен деревьев — распределение почти
+    такое же гладкое, как у реальной цены."""
     y_real = np.expm1(y_test)
-    order = np.argsort(y_real.values)
-    x = np.arange(len(order))
+    preds = {name: np.expm1(model.predict(X_test)) for name, model in models.items()}
 
-    preds = {}
-    ymax = float(y_real.max())
-    for name, model in models.items():
-        pred_real = np.expm1(model.predict(X_test))
-        preds[name] = pred_real
-        ymax = max(ymax, float(pred_real.max()))
+    all_vals = np.concatenate([y_real.values] + list(preds.values()))
+    bins = np.linspace(all_vals.min(), all_vals.max(), 60)
 
-    fig, axes = plt.subplots(1, len(models), figsize=(6 * len(models), 5), sharey=True)
+    fig, axes = plt.subplots(1, len(models), figsize=(6 * len(models), 4.5), sharey=True)
     axes = np.atleast_1d(axes)
     for ax, (name, pred_real) in zip(axes, preds.items()):
-        ax.plot(x, y_real.values[order], color=colors["neutral"], lw=1.8,
-                label="Реальная цена (отсортирована)", zorder=1)
-        ax.scatter(x, pred_real[order], color=colors["primary"], s=5, alpha=0.35,
-                   label="Предсказание модели", zorder=2)
+        ax.hist(y_real, bins=bins, color=colors["neutral"], alpha=0.5, label="Реальная цена")
+        ax.hist(pred_real, bins=bins, color=colors["primary"], alpha=0.6, label="Предсказание модели")
         n_unique = len(np.unique(np.round(pred_real, 0)))
-        ax.set_title(f"{name}\nуникальных значений предсказания: {n_unique:,}".replace(",", " "),
-                     fontsize=11, fontweight="bold")
-        ax.set_xlabel("Объекты test, отсортированные по реальной цене")
-        ax.set_ylim(0, ymax * 1.05)
-    axes[0].set_ylabel("Цена/м²")
-    axes[0].legend(fontsize=9, loc="upper left")
-    plt.suptitle("Предсказание vs реальность: видно, что модель предсказывает конечным "
-                 "набором значений («ступеньками»), а не непрерывной прямой", y=1.03)
+        pct_unique = n_unique / len(pred_real) * 100
+        ax.set_title(f"{name}\n{n_unique:,} уникальных предсказаний из {len(pred_real):,} ({pct_unique:.0f}%)"
+                     .replace(",", " "), fontsize=10.5, fontweight="bold")
+        ax.set_xlabel("Цена/м²")
+    axes[0].set_ylabel("Количество объектов")
+    axes[0].legend(fontsize=9)
+    plt.suptitle("Реальная цена (серый) vs предсказания модели (синий): у дерева решений "
+                 "предсказания «скучиваются» в немногих точках — не непрерывное "
+                 "распределение, как у настоящих цен", y=1.05)
     plt.tight_layout()
     plt.show()
 
