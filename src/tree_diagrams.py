@@ -1,89 +1,83 @@
 """Иллюстративные HTML-схемы того, как Decision Tree / Random Forest / XGBoost
 принимают решение — с вопросами и признаками из этого же проекта.
 
-Это не буквальный экспорт обученного дерева (там сотни узлов и его невозможно
-показать на слайде) — это упрощённая, но честная по логике схема на 2 уровня,
-чтобы нетехническая аудитория увидела сам механизм на понятном примере.
+Это не буквальный экспорт обученного дерева (там сотни узлов, на слайде не
+показать) — упрощённая, но честная по логике схема на 2 уровня, чтобы
+нетехническая аудитория увидела сам механизм на понятном примере.
+
+Ветвление рисуется вложенными блоками с цветной рамкой слева (а не
+CSS-коннекторами через :only-child/::before — они не одинаково стабильно
+рендерятся в разных HTML-движках, включая встроенный просмотрщик ноутбуков),
+поэтому схема выглядит одинаково независимо от того, где открыт ноутбук.
 """
 from IPython.display import display, HTML
 
-_TREE_CSS = """
-<style>
-.krisha-tree, .krisha-tree ul {
-  padding-top: 20px; position: relative;
-  display: flex; justify-content: center;
-}
-.krisha-tree li {
-  list-style-type: none;
-  position: relative;
-  padding: 20px 8px 0 8px;
-  text-align: center;
-}
-.krisha-tree li::before, .krisha-tree li::after {
-  content: '';
-  position: absolute; top: 0; right: 50%;
-  border-top: 2px solid #CBD5E0;
-  width: 50%; height: 20px;
-}
-.krisha-tree li::after {
-  right: auto; left: 50%;
-  border-left: 2px solid #CBD5E0;
-}
-.krisha-tree li:only-child::after, .krisha-tree li:only-child::before { display: none; }
-.krisha-tree li:only-child { padding-top: 0; }
-.krisha-tree li:first-child::before, .krisha-tree li:last-child::after { border: 0 none; }
-.krisha-tree li:last-child::before { border-right: 2px solid #CBD5E0; border-radius: 0 5px 0 0; }
-.krisha-tree li:first-child::after { border-radius: 5px 0 0 0; }
-.krisha-tree ul ul::before {
-  content: '';
-  position: absolute; top: 0; left: 50%;
-  border-left: 2px solid #CBD5E0;
-  width: 0; height: 20px;
-}
-.krisha-node {
-  display: inline-block;
-  border-radius: 10px;
-  padding: 10px 14px;
-  font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-  font-size: 12.5px;
-  line-height: 1.35;
-  min-width: 100px;
-  box-sizing: border-box;
-}
-</style>
-"""
+_FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"
 
 
-def _node_html(label: str, colors: dict, leaf: bool = False) -> str:
-    if leaf:
-        return (f'<div class="krisha-node" style="background:{colors["pos"]};'
-                f'color:white;font-weight:700;border:1px solid {colors["pos"]};">{label}</div>')
-    return (f'<div class="krisha-node" style="background:white;color:#1A202C;'
-            f'font-weight:600;border:1.5px solid {colors["primary"]};">{label}</div>')
+def _question_html(label: str, colors: dict) -> str:
+    return (
+        f'<div style="display:inline-block;background:linear-gradient(135deg,{colors["primary"]},#2563C9);'
+        f'color:white;font-weight:700;font-size:13px;padding:10px 18px;border-radius:999px;'
+        f'box-shadow:0 3px 8px rgba(47,128,237,0.35);font-family:{_FONT};">❓ {label}</div>'
+    )
 
 
-def _render(node: dict, colors: dict) -> str:
-    is_leaf = not node.get("children")
-    html = f'<li>{_node_html(node["label"], colors, leaf=is_leaf)}'
-    if not is_leaf:
-        html += "<ul>"
-        for child in node["children"]:
-            html += _render(child, colors)
-        html += "</ul>"
-    html += "</li>"
+def _leaf_html(label: str, colors: dict) -> str:
+    return (
+        f'<div style="display:inline-block;background:linear-gradient(135deg,{colors["pos"]},#1E8449);'
+        f'color:white;font-weight:700;font-size:13px;padding:10px 18px;border-radius:10px;'
+        f'box-shadow:0 3px 8px rgba(39,174,96,0.35);font-family:{_FONT};">💰 {label}</div>'
+    )
+
+
+def _branch_html(answer: str, node_html: str, good: bool, colors: dict) -> str:
+    """Содержимое одной ветки «Да»/«Нет» — цветная рамка слева группирует
+    вопрос/лист без хрупких линий-коннекторов."""
+    tag_color = colors["pos"] if good else colors["neg"]
+    tag_text = answer or ("✅ Да" if good else "❌ Нет")
+    return f"""
+    <div style="border-left:3px solid {tag_color};border-radius:0 10px 10px 0;
+                background:{tag_color}0D;padding:12px 16px;height:100%;box-sizing:border-box;">
+      <div style="font-size:11px;font-weight:700;color:{tag_color};margin-bottom:8px;
+                  text-transform:uppercase;letter-spacing:0.5px;">{tag_text}</div>
+      {node_html}
+    </div>
+    """
+
+
+def _render(node: dict, colors: dict, horizontal: bool = False) -> str:
+    """horizontal=True кладёт две ветки рядом (колонками) — годится для
+    самостоятельного дерева. horizontal=False укладывает их друг под другом —
+    компактнее для узких колонок мини-деревьев (лес/бустинг)."""
+    is_leaf = "children" not in node
+    if is_leaf:
+        return _leaf_html(node["label"], colors)
+
+    html = _question_html(node["label"], colors)
+    branches = [
+        _branch_html(c.get("answer", ""), _render(c["node"], colors, horizontal), c["good"], colors)
+        for c in node["children"]
+    ]
+    if horizontal:
+        cols = "".join(f'<div style="flex:1;min-width:0;">{b}</div>' for b in branches)
+        html += f'<div style="display:flex;gap:14px;margin-top:12px;align-items:stretch;">{cols}</div>'
+    else:
+        stacked = "".join(f"<div>{b}</div>" for b in branches)
+        html += f'<div style="display:flex;flex-direction:column;gap:10px;margin-top:10px;">{stacked}</div>'
     return html
 
 
-def _wrap(title: str, subtitle: str, body_html: str, footnote: str, colors: dict) -> str:
+def _card(title: str, subtitle: str, body_html: str, footnote: str, accent: str) -> str:
     return f"""
-    {_TREE_CSS}
-    <div style="border:1px solid #E2E8F0;border-radius:12px;padding:18px 20px;margin:10px 0;
-                font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:white;">
-      <div style="font-weight:700;font-size:15px;color:#1A202C;">{title}</div>
-      <div style="color:#718096;font-size:12px;margin-top:2px;margin-bottom:6px;">{subtitle}</div>
+    <div style="border:1px solid #E2E8F0;border-radius:14px;padding:20px 22px;margin:12px 0;
+                font-family:{_FONT};background:linear-gradient(180deg,#FFFFFF,#FAFBFF);
+                box-shadow:0 2px 10px rgba(0,0,0,0.04);">
+      <div style="font-weight:700;font-size:16px;color:#1A202C;">{title}</div>
+      <div style="color:#718096;font-size:12.5px;margin-top:2px;margin-bottom:14px;">{subtitle}</div>
       {body_html}
-      <div style="margin-top:14px;padding:10px 14px;background:#F7FAFC;border-radius:8px;
-                  color:#4A5568;font-size:12.5px;">{footnote}</div>
+      <div style="margin-top:16px;padding:12px 16px;background:#F7FAFC;border-radius:10px;
+                  color:#4A5568;font-size:12.5px;border-left:3px solid {accent};">{footnote}</div>
     </div>
     """
 
@@ -94,30 +88,31 @@ def draw_decision_tree_html(colors: dict) -> None:
     tree = {
         "label": "Площадь ≥ 60 м²?",
         "children": [
-            {
-                "label": "Нет →<br>Район = Есильский?",
+            {"good": False, "node": {
+                "label": "Район = Есильский?",
                 "children": [
-                    {"label": "Нет<br><b>≈ 480 000 тг/м²</b>"},
-                    {"label": "Да<br><b>≈ 650 000 тг/м²</b>"},
+                    {"good": False, "node": {"label": "≈ 480 000 тг/м²"}},
+                    {"good": True, "node": {"label": "≈ 650 000 тг/м²"}},
                 ],
-            },
-            {
-                "label": "Да →<br>Год постройки ≥ 2015?",
+            }},
+            {"good": True, "node": {
+                "label": "Год постройки ≥ 2015?",
                 "children": [
-                    {"label": "Нет<br><b>≈ 560 000 тг/м²</b>"},
-                    {"label": "Да<br><b>≈ 740 000 тг/м²</b>"},
+                    {"good": False, "node": {"label": "≈ 560 000 тг/м²"}},
+                    {"good": True, "node": {"label": "≈ 740 000 тг/м²"}},
                 ],
-            },
+            }},
         ],
     }
-    body = f'<ul class="krisha-tree">{_render(tree, colors)}</ul>'
-    html = _wrap(
-        "🌲 Decision Tree — логика одного дерева на примере оценки квартиры",
-        "Синие блоки — вопросы «да/нет», зелёные — итоговый лист с предсказанной ценой.",
+    body = (f'<div style="max-width:820px;margin:0 auto;text-align:center;">'
+            f'{_render(tree, colors, horizontal=True)}</div>')
+    html = _card(
+        "🌲 Как Decision Tree оценивает квартиру",
+        "Синий пузырь — вопрос «да/нет», зелёный — итоговый лист с предсказанной ценой.",
         body,
         "Дерево физически не может предсказать ничего, кроме одного из своих листьев — "
-        "поэтому у него ограниченный, конечный набор возможных ответов.",
-        colors,
+        "у него ограниченный, конечный набор возможных ответов.",
+        colors["primary"],
     )
     display(HTML(html))
 
@@ -126,59 +121,36 @@ def draw_decision_tree_html(colors: dict) -> None:
 
 def draw_random_forest_html(colors: dict) -> None:
     trees = [
-        {
-            "label": "Дерево А (случайная подвыборка 1)",
-            "root": {
-                "label": "Площадь ≥ 60 м²?",
-                "children": [
-                    {"label": "Нет<br><b>520 000</b>"},
-                    {"label": "Да<br><b>700 000</b>"},
-                ],
-            },
-            "pick": "700 000",
-        },
-        {
-            "label": "Дерево Б (случайная подвыборка 2)",
-            "root": {
-                "label": "Район = Есильский?",
-                "children": [
-                    {"label": "Нет<br><b>560 000</b>"},
-                    {"label": "Да<br><b>750 000</b>"},
-                ],
-            },
-            "pick": "750 000",
-        },
-        {
-            "label": "Дерево В (случайная подвыборка 3)",
-            "root": {
-                "label": "Высота потолков ≥ 3 м?",
-                "children": [
-                    {"label": "Нет<br><b>600 000</b>"},
-                    {"label": "Да<br><b>780 000</b>"},
-                ],
-            },
-            "pick": "780 000",
-        },
+        ("Дерево А", "случайная подвыборка 1", "Площадь ≥ 60 м²?", "520 000", "700 000"),
+        ("Дерево Б", "случайная подвыборка 2", "Район = Есильский?", "560 000", "750 000"),
+        ("Дерево В", "случайная подвыборка 3", "Высота потолков ≥ 3 м?", "600 000", "780 000"),
     ]
-    body = '<div style="display:flex;gap:18px;flex-wrap:wrap;justify-content:center;">'
-    for t in trees:
-        body += (
-            f'<div style="text-align:center;">'
-            f'<div style="font-size:11.5px;color:#718096;margin-bottom:2px;">{t["label"]}</div>'
-            f'<ul class="krisha-tree" style="padding-top:10px;">{_render(t["root"], colors)}</ul>'
-            f"</div>"
-        )
-    body += "</div>"
-    html = _wrap(
-        "🌳🌳🌳 Random Forest — много разных деревьев на разных случайных подвыборках",
-        "Каждое дерево видит свою часть данных и признаков, поэтому задаёт разные вопросы.",
+    cols = ""
+    for name, subtitle, q, no_val, yes_val in trees:
+        mini = {
+            "label": q,
+            "children": [
+                {"good": False, "node": {"label": no_val}},
+                {"good": True, "node": {"label": yes_val}},
+            ],
+        }
+        cols += f"""
+        <div style="flex:1;min-width:220px;text-align:center;">
+          <div style="font-weight:700;font-size:12.5px;color:#1A202C;">{name}</div>
+          <div style="font-size:11px;color:#A0AEC0;margin-bottom:8px;">{subtitle}</div>
+          {_render(mini, colors)}
+        </div>
+        """
+    body = f'<div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center;">{cols}</div>'
+    html = _card(
+        "🌳🌳🌳 Как Random Forest оценивает квартиру",
+        "Каждое дерево видит свою случайную часть данных и признаков — поэтому задаёт разные вопросы.",
         body,
-        "Пример: квартира 75 м², Есильский р-н, потолки 3.1 м → "
-        "Дерево А даёт 700 000, Дерево Б — 750 000, Дерево В — 780 000. "
-        "Финальный прогноз — среднее по всем деревьям леса: <b>≈ 743 000 тг/м²</b>. "
-        "Это и есть «мудрость толпы» — отдельные деревья ошибаются по-разному, "
-        "а их среднее оказывается устойчивее любого из них.",
-        colors,
+        "Пример: квартира 75 м², Есильский р-н, потолки 3.1 м → Дерево А даёт 700 000, "
+        "Дерево Б — 750 000, Дерево В — 780 000. Финальный прогноз — среднее по всем "
+        "деревьям леса: <b>≈ 743 000 тг/м²</b>. Это и есть «мудрость толпы»: отдельные "
+        "деревья ошибаются по-разному, а их среднее оказывается устойчивее любого из них.",
+        colors["pos"],
     )
     display(HTML(html))
 
@@ -186,58 +158,41 @@ def draw_random_forest_html(colors: dict) -> None:
 # ─── XGBoost: цепочка деревьев, каждое исправляет ошибку предыдущего ───────
 
 def draw_xgboost_html(colors: dict) -> None:
-    trees = [
-        {
-            "title": "Дерево 1 — грубый первый прогноз",
-            "root": {
-                "label": "Площадь ≥ 60 м²?",
-                "children": [
-                    {"label": "Нет<br><b>550 000</b>"},
-                    {"label": "Да<br><b>650 000</b>"},
-                ],
-            },
-        },
-        {
-            "title": "Дерево 2 — коррекция для премиум-сегмента",
-            "root": {
-                "label": "Есильский р-н И<br>потолки ≥ 3 м?",
-                "children": [
-                    {"label": "Нет<br><b>+0</b>"},
-                    {"label": "Да<br><b>+90 000</b>"},
-                ],
-            },
-        },
-        {
-            "title": "Дерево 3 — точечная докрутка",
-            "root": {
-                "label": "Год постройки ≥ 2015?",
-                "children": [
-                    {"label": "Нет<br><b>−10 000</b>"},
-                    {"label": "Да<br><b>+20 000</b>"},
-                ],
-            },
-        },
+    steps = [
+        ("Дерево 1", "грубый первый прогноз", "Площадь ≥ 60 м²?", "550 000", "650 000"),
+        ("Дерево 2", "коррекция для премиум-сегмента", "Есильский р-н И потолки ≥ 3 м?", "+0", "+90 000"),
+        ("Дерево 3", "точечная докрутка", "Год постройки ≥ 2015?", "−10 000", "+20 000"),
     ]
-    body = '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;">'
-    for i, t in enumerate(trees):
-        body += (
-            f'<div style="text-align:center;">'
-            f'<div style="font-size:11.5px;color:#718096;margin-bottom:2px;max-width:150px;">{t["title"]}</div>'
-            f'<ul class="krisha-tree" style="padding-top:10px;">{_render(t["root"], colors)}</ul>'
-            f"</div>"
-        )
-        if i < len(trees) - 1:
-            body += (f'<div style="font-size:22px;color:{colors["neg"]};font-weight:700;'
-                      f'align-self:center;">→</div>')
-    body += "</div>"
-    html = _wrap(
-        "🚀 XGBoost — цепочка деревьев, каждое исправляет ошибки предыдущего",
-        "В отличие от Random Forest деревья строятся не параллельно, а по очереди.",
+    cols = []
+    for name, subtitle, q, no_val, yes_val in steps:
+        mini = {
+            "label": q,
+            "children": [
+                {"good": False, "node": {"label": no_val}},
+                {"good": True, "node": {"label": yes_val}},
+            ],
+        }
+        cols.append(f"""
+        <div style="text-align:center;min-width:220px;">
+          <div style="font-weight:700;font-size:12.5px;color:#1A202C;">{name}</div>
+          <div style="font-size:11px;color:#A0AEC0;margin-bottom:8px;max-width:200px;
+                      margin-left:auto;margin-right:auto;">{subtitle}</div>
+          {_render(mini, colors)}
+        </div>
+        """)
+    arrow = (f'<div style="font-size:26px;color:{colors["accent"]};font-weight:700;'
+             f'align-self:center;padding:0 4px;">➜</div>')
+    body = (f'<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;'
+            f'align-items:center;">{arrow.join(cols)}</div>')
+    html = _card(
+        "🚀 Как XGBoost оценивает квартиру",
+        "Деревья строятся не параллельно, как в Random Forest, а по очереди — каждое следующее "
+        "исправляет ошибки предыдущего.",
         body,
-        "Пример: та же квартира 75 м², Есильский р-н, потолки 3.1 м, год 2021 → "
-        "Дерево 1 даёт грубую базу 650 000, Дерево 2 добавляет поправку +90 000 за "
-        "премиум-сегмент, Дерево 3 добавляет ещё +20 000 за новый год постройки. "
-        "Итог — сумма всей цепочки: <b>650 000 + 90 000 + 20 000 = 760 000 тг/м²</b>.",
-        colors,
+        "Пример: та же квартира 75 м², Есильский р-н, потолки 3.1 м, год 2021 → Дерево 1 "
+        "даёт грубую базу 650 000, Дерево 2 добавляет поправку +90 000 за премиум-сегмент, "
+        "Дерево 3 добавляет ещё +20 000 за новый год постройки. Итог — сумма всей цепочки: "
+        "<b>650 000 + 90 000 + 20 000 = 760 000 тг/м²</b>.",
+        colors["accent"],
     )
     display(HTML(html))
