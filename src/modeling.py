@@ -126,7 +126,7 @@ def tune_xgboost(X_train, y_train, cv: int = 5, random_state: int = RANDOM_STATE
     search = RandomizedSearchCV(
         XGBRegressor(
             n_estimators=2000, learning_rate=0.05,
-            early_stopping_rounds=early_stopping_rounds, eval_metric="mae",
+            early_stopping_rounds=early_stopping_rounds, eval_metric="mape",
             random_state=random_state, n_jobs=1, verbosity=0,
         ),
         param_dist, n_iter=n_iter, cv=kfold, scoring=MAPE_SCORER,
@@ -155,10 +155,22 @@ def tune_xgboost(X_train, y_train, cv: int = 5, random_state: int = RANDOM_STATE
 
 
 def _report_search(search, name: str, extra_rows: list[tuple[str, str]] | None = None) -> None:
+    # Намеренно не показываем здесь числовую CV-ошибку: она посчитана на
+    # части train (внутри кросс-валидации) и почти всегда чуть отличается
+    # от итоговой ошибки на test — для нетехнической аудитории две разные
+    # цифры "точности" одной и той же модели выглядят как противоречие.
+    # Единственное число, на которое стоит ориентироваться — MAPE на test
+    # из раздела "Метрика каждой модели на test" ниже.
     rows = [(k, str(v)) for k, v in search.best_params_.items()]
     rows += extra_rows or []
-    rows += [("CV MAPE", f"{-search.best_score_:.1f}%")]
-    card(f"{name}: лучшие гиперпараметры (5-fold CV на train)", rows=rows, accent="#27AE60")
+    card(
+        f"{name}: лучшие гиперпараметры (5-fold CV на train)",
+        rows=rows,
+        note="Эти параметры выбраны кросс-валидацией на train — тестовую выборку модель "
+             "здесь ещё не видела. Итоговую точность (и единственное число, на которое "
+             "стоит ориентироваться) смотрите в разделе «Метрика каждой модели на test» ниже.",
+        accent="#27AE60",
+    )
 
 
 def _plot_validation_curve_dt(search, colors) -> None:
