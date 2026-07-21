@@ -258,29 +258,6 @@ def plot_predictions_grid(models: dict, X_test, y_test, colors: dict) -> None:
     plt.show()
 
 
-# ─── Важность признаков (все модели вместе, одинаковый масштаб) ────────────
-
-def plot_feature_importance_grid(models: dict, feature_names, colors: dict, top_n: int = 10) -> dict:
-    importances = {
-        name: pd.Series(model.feature_importances_, index=feature_names).sort_values(ascending=False)
-        for name, model in models.items()
-    }
-    max_val = max(imp.head(top_n).max() for imp in importances.values())
-
-    fig, axes = plt.subplots(1, len(models), figsize=(5.5 * len(models), 5.5))
-    axes = np.atleast_1d(axes)
-    for ax, (name, imp) in zip(axes, importances.items()):
-        imp.head(top_n).plot(kind="barh", ax=ax, color=colors["primary"])
-        ax.invert_yaxis()
-        ax.set_xlim(0, max_val * 1.1)
-        ax.set_title(name, fontweight="bold")
-        ax.set_xlabel("Feature importance")
-    plt.suptitle(f"Топ-{top_n} важных признаков — одинаковый масштаб для сравнения", y=1.03)
-    plt.tight_layout()
-    plt.show()
-    return importances
-
-
 # ─── Сравнение моделей и выбор лучшей ──────────────────────────────────────
 
 def compare_models(results: dict, colors: dict) -> str:

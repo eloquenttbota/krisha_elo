@@ -86,33 +86,44 @@ def hypothesis_result(tag: str, text: str, stat_name: str, stat_value: float,
     return confirmed
 
 
-def show_qr_code(path: str, caption: str, size: int = 300) -> None:
-    """Показывает QR-код с подписью, если файл уже лежит в директории проекта.
-    Пока файла нет — аккуратная заглушка с именем, которое нужно положить рядом."""
+def _qr_code_html(path: str, caption: str, size: int) -> str:
+    """HTML для одного QR-кода (или заглушки, если файла ещё нет)."""
     if not os.path.exists(path):
-        html = f"""
+        return f"""
         <div style="display:inline-block;width:{size}px;height:{size}px;margin:8px 16px 8px 0;
                     border:2px dashed #CBD5E0;border-radius:10px;text-align:center;
                     display:flex;flex-direction:column;align-items:center;justify-content:center;
                     font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-                    color:#A0AEC0;font-size:12px;padding:8px;box-sizing:border-box;">
+                    color:#A0AEC0;font-size:12px;padding:8px;box-sizing:border-box;
+                    vertical-align:top;">
           <span style="font-size:22px;">🔲</span>
           <span>Положите файл<br><b>{path}</b><br>рядом с ноутбуком</span>
         </div>
         """
-        display(HTML(html))
-        return
-
     with open(path, "rb") as f:
         b64 = base64.b64encode(f.read()).decode("ascii")
-    html = f"""
+    return f"""
     <div style="display:inline-block;text-align:center;margin:8px 16px 8px 0;
+                vertical-align:top;
                 font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
       <img src="data:image/png;base64,{b64}" width="{size}" height="{size}"
            style="border-radius:10px;border:1px solid #E2E8F0;" />
       <div style="margin-top:6px;font-size:12px;color:#4A5568;max-width:{size}px;">{caption}</div>
     </div>
     """
+
+
+def show_qr_code(path: str, caption: str, size: int = 300) -> None:
+    """Показывает один QR-код с подписью (или заглушку, если файла ещё нет)."""
+    display(HTML(_qr_code_html(path, caption, size)))
+
+
+def show_qr_codes(items: list[tuple[str, str]], size: int = 300) -> None:
+    """Показывает несколько QR-кодов в один ряд, в одном масштабе."""
+    html = '<div style="display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px;">'
+    for path, caption in items:
+        html += _qr_code_html(path, caption, size)
+    html += "</div>"
     display(HTML(html))
 
 

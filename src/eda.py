@@ -86,14 +86,18 @@ def eda_price(df: pd.DataFrame, colors: dict) -> None:
             ("Максимум", f"{price.max():,.0f} тг".replace(",", " ")),
             ("Медиана", f"{median:,.0f} тг".replace(",", " ")),
             ("Среднее", f"{mean:,.0f} тг".replace(",", " ")),
-            ("Выбросов по IQR", f"{len(outliers):,} ({len(outliers) / len(price) * 100:.1f}%)".replace(",", " ")),
+            ("Выбросов по формальному IQR", f"{len(outliers):,} ({len(outliers) / len(price) * 100:.1f}%)".replace(",", " ")),
         ],
         note="Среднее заметно выше медианы — значит, небольшое число очень дорогих "
              "квартир (до 1.6 млрд тг) тянет среднее вверх. На графике видны и они — "
              "мы намеренно не обрезаем хвост, чтобы честно показать сырые данные. "
-             "Удалением аномалий займёмся отдельно, в разделе 5. А для самой модели "
-             "цена будет прологарифмирована — так редкие дорогие квартиры не "
-             "искажают обучение.",
+             "Число выбросов по IQR здесь — чисто иллюстративная оценка «на глаз», "
+             "по формальному статистическому правилу. Она НЕ используется напрямую "
+             "для удаления строк: реальную очистку в разделе 5 мы делаем по границам "
+             "реального рынка Астаны (а не по IQR), а хвост цены/м² при подготовке "
+             "признаков обрезаем по перцентилям — поэтому итоговое число удалённых "
+             "строк в этих разделах будет другим. А для самой модели цена будет "
+             "прологарифмирована — так редкие дорогие квартиры не искажают обучение.",
         accent=colors["pos"],
     )
 
@@ -284,12 +288,12 @@ def eda_hypotheses(df: pd.DataFrame, colors: dict) -> dict:
         "Spearman r", r4, p4,
     )
 
-    # H5 (по этим данным): квартира в жилом комплексе дороже, чем на вторичке
+    # H5 (по этим данным): квартиры в ЖК ценятся выше объектов без указания ЖК
     with_complex = h.loc[h["in_complex"] == 1, "price_per_sqm"].dropna()
     without_complex = h.loc[h["in_complex"] == 0, "price_per_sqm"].dropna()
     u5, p5 = stats.mannwhitneyu(with_complex, without_complex, alternative="two-sided")
     results["H5"] = hypothesis_result(
-        "H5", "Квартиры в жилых комплексах (ЖК) дороже за м², чем на вторичном рынке",
+        "H5", "Квартиры в жилых комплексах ценятся выше, чем объекты без указания ЖК",
         "Mann-Whitney U", u5, p5,
     )
 
@@ -325,8 +329,8 @@ def eda_hypotheses(df: pd.DataFrame, colors: dict) -> dict:
     axes[2].boxplot(box_data, patch_artist=True,
                      boxprops=dict(facecolor=colors["light"]), showfliers=False)
     axes[2].set_xticks([1, 2])
-    axes[2].set_xticklabels(["В ЖК", "Вторичка"])
-    axes[2].set_title("H5: цена/м² — ЖК vs вторичка")
+    axes[2].set_xticklabels(["В ЖК", "Без ЖК"])
+    axes[2].set_title("H5: цена/м² — с ЖК vs без указания ЖК")
     axes[2].set_ylabel("Цена/м²")
     plt.tight_layout()
     plt.show()
