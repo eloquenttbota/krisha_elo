@@ -155,20 +155,16 @@ def tune_xgboost(X_train, y_train, cv: int = 5, random_state: int = RANDOM_STATE
 
 
 def _report_search(search, name: str, extra_rows: list[tuple[str, str]] | None = None) -> None:
-    # Намеренно не показываем здесь числовую CV-ошибку: она посчитана на
-    # части train (внутри кросс-валидации) и почти всегда чуть отличается
-    # от итоговой ошибки на test — для нетехнической аудитории две разные
-    # цифры "точности" одной и той же модели выглядят как противоречие.
-    # Единственное число, на которое стоит ориентироваться — MAPE на test
-    # из раздела "Метрика каждой модели на test" ниже.
     rows = [(k, str(v)) for k, v in search.best_params_.items()]
     rows += extra_rows or []
+    rows += [("CV MAPE (на train)", f"{-search.best_score_:.1f}%")]
     card(
         f"{name}: лучшие гиперпараметры (5-fold CV на train)",
         rows=rows,
-        note="Эти параметры выбраны кросс-валидацией на train — тестовую выборку модель "
-             "здесь ещё не видела. Итоговую точность (и единственное число, на которое "
-             "стоит ориентироваться) смотрите в разделе «Метрика каждой модели на test» ниже.",
+        note="Это ошибка на кросс-валидации — по ней выбирались параметры, тестовую "
+             "выборку модель тут ещё не видела. Итоговую точность на test смотрите "
+             "в разделе «Метрика каждой модели на test» ниже — число там может "
+             "немного отличаться, это нормально: разные выборки.",
         accent="#27AE60",
     )
 
@@ -288,28 +284,34 @@ def evaluate_model(model, X_test, y_test, name: str, colors: dict) -> dict:
     return metrics
 
 
-# ─── Как на самом деле выглядят предсказания деревьев (не как в линейной регрессии) ─
+# ─── Предсказание vs реальность: должно наглядно подтверждать MAPE выше ────
 
 def plot_predictions_grid(models: dict, X_test, y_test, colors: dict) -> None:
+    """Классический scatter «предсказание vs реальность»: чем плотнее точки
+    жмутся к пунктирной диагонали, тем меньше ошибка — эта картинка обязана
+    визуально соответствовать MAPE из раздела выше, а не противоречить ей.
+    Число уникальных предсказаний оставляем подписью — оно по-прежнему
+    показывает, что дерево физически не может ответить чем угодно, а не
+    произвольным непрерывным числом, как линейная регрессия."""
     y_real = np.expm1(y_test)
     preds = {name: np.expm1(model.predict(X_test)) for name, model in models.items()}
 
     all_vals = np.concatenate([y_real.values] + list(preds.values()))
-    bins = np.linspace(all_vals.min(), all_vals.max(), 60)
+    lims = [float(all_vals.min()), float(all_vals.max())]
 
-    fig, axes = plt.subplots(1, len(models), figsize=(6 * len(models), 4.5), sharey=True)
+    fig, axes = plt.subplots(1, len(models), figsize=(6 * len(models), 5.5), sharex=True, sharey=True)
     axes = np.atleast_1d(axes)
     for ax, (name, pred_real) in zip(axes, preds.items()):
-        ax.hist(y_real, bins=bins, color=colors["neutral"], alpha=0.5, label="Реальная цена")
-        ax.hist(pred_real, bins=bins, color=colors["primary"], alpha=0.6, label="Предсказание модели")
+        ax.scatter(y_real, pred_real, alpha=0.25, s=6, color=colors["primary"])
+        ax.plot(lims, lims, "--", color=colors["neg"], lw=1.5, label="идеальное предсказание")
         n_unique = len(np.unique(np.round(pred_real, 0)))
-        ax.set_title(f"{name}\nразных значений цены в ответах модели: {n_unique:,} из {len(pred_real):,}"
+        ax.set_title(f"{name}\nразных значений цены в ответах: {n_unique:,} из {len(pred_real):,}"
                      .replace(",", " "), fontsize=10.5, fontweight="bold")
-        ax.set_xlabel("Цена/м²")
-    axes[0].set_ylabel("Количество объектов")
-    axes[0].legend(fontsize=9)
-    plt.suptitle("Реальная цена (серый) vs предсказания модели (синий) — это про форму "
-                 "распределения ответов, не про ошибку модели (MAPE смотрите в разделе выше)", y=1.05)
+        ax.set_xlabel("Реальная цена/м²")
+    axes[0].set_ylabel("Предсказанная цена/м²")
+    axes[0].legend(fontsize=9, loc="upper left")
+    plt.suptitle("Чем плотнее точки у пунктирной линии — тем точнее модель "
+                 "(согласуется с MAPE из раздела выше)", y=1.03)
     plt.tight_layout()
     plt.show()
 
