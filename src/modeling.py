@@ -107,32 +107,58 @@ def tune_random_forest(X_train, y_train, cv: int = 5, random_state: int = RANDOM
 
 def tune_xgboost(X_train, y_train, cv: int = 5, random_state: int = RANDOM_STATE,
                   n_iter: int = 20, colors: dict = None):
+    # Валидационный кусок ИЗ train (не test!) — только для early stopping:
+    # вместо перебора n_estimators руками даём большой запас (2000 деревьев)
+    # и позволяем каждой комбинации гиперпараметров самой остановиться, как
+    # только качество на валидации перестаёт расти.
+    X_fit, X_val, y_fit, y_val = train_test_split(
+        X_train, y_train, test_size=0.15, random_state=random_state,
+    )
+    early_stopping_rounds = 30
     kfold = KFold(n_splits=cv, shuffle=True, random_state=random_state)
     param_dist = {
-        "n_estimators": [100, 200, 300, 500],
         "max_depth": [3, 4, 5, 6, 8],
-        "learning_rate": [0.01, 0.03, 0.05, 0.1],
+        "min_child_weight": [1, 3, 5, 7],
+        "gamma": [0, 0.1, 0.3, 0.5],
         "subsample": [0.7, 0.8, 0.9, 1.0],
         "colsample_bytree": [0.6, 0.8, 1.0],
     }
     search = RandomizedSearchCV(
-        XGBRegressor(random_state=random_state, n_jobs=-1, verbosity=0),
+        XGBRegressor(
+            n_estimators=2000, learning_rate=0.05,
+            early_stopping_rounds=early_stopping_rounds, eval_metric="mae",
+            random_state=random_state, n_jobs=1, verbosity=0,
+        ),
         param_dist, n_iter=n_iter, cv=kfold, scoring=MAPE_SCORER,
         random_state=random_state, n_jobs=-1,
     )
-    search.fit(X_train, y_train)
-    _plot_param_vs_score(search, "n_estimators", "XGBoost", colors or {})
-    _report_search(search, "XGBoost")
-    return search.best_estimator_, search.best_params_
+    search.fit(X_fit, y_fit, eval_set=[(X_val, y_val)], verbose=False)
+    best_n_trees = search.best_estimator_.best_iteration + 1
 
-
-def _report_search(search, name: str) -> None:
-    card(
-        f"{name}: лучшие гиперпараметры (5-fold CV на train)",
-        rows=[(k, str(v)) for k, v in search.best_params_.items()]
-        + [("CV MAPE", f"{-search.best_score_:.1f}%")],
-        accent="#27AE60",
+    # "Запекаем" найденное число деревьев как фиксированный n_estimators и
+    # убираем early stopping — дальше эта модель используется как обычная
+    # (learning curve, финальная оценка и т.д.) и ей не нужен eval_set при
+    # каждом переобучении. Переобучаем на всём train, а не только на X_fit.
+    best_params = dict(search.best_params_)
+    final_model = XGBRegressor(
+        n_estimators=best_n_trees, learning_rate=0.05,
+        random_state=random_state, n_jobs=-1, verbosity=0, **best_params,
     )
+    final_model.fit(X_train, y_train)
+
+    _plot_param_vs_score(search, "max_depth", "XGBoost", colors or {})
+    _report_search(search, "XGBoost", extra_rows=[
+        ("early_stopping_rounds", str(early_stopping_rounds)),
+        ("Найдено деревьев (best_iteration)", str(best_n_trees)),
+    ])
+    return final_model, {**best_params, "n_estimators": best_n_trees}
+
+
+def _report_search(search, name: str, extra_rows: list[tuple[str, str]] | None = None) -> None:
+    rows = [(k, str(v)) for k, v in search.best_params_.items()]
+    rows += extra_rows or []
+    rows += [("CV MAPE", f"{-search.best_score_:.1f}%")]
+    card(f"{name}: лучшие гиперпараметры (5-fold CV на train)", rows=rows, accent="#27AE60")
 
 
 def _plot_validation_curve_dt(search, colors) -> None:
@@ -265,13 +291,13 @@ def plot_predictions_grid(models: dict, X_test, y_test, colors: dict) -> None:
         ax.hist(y_real, bins=bins, color=colors["neutral"], alpha=0.5, label="Реальная цена")
         ax.hist(pred_real, bins=bins, color=colors["primary"], alpha=0.6, label="Предсказание модели")
         n_unique = len(np.unique(np.round(pred_real, 0)))
-        pct_unique = n_unique / len(pred_real) * 100
-        ax.set_title(f"{name}\n{n_unique:,} уникальных предсказаний из {len(pred_real):,} ({pct_unique:.0f}%)"
+        ax.set_title(f"{name}\nразных значений цены в ответах модели: {n_unique:,} из {len(pred_real):,}"
                      .replace(",", " "), fontsize=10.5, fontweight="bold")
         ax.set_xlabel("Цена/м²")
     axes[0].set_ylabel("Количество объектов")
     axes[0].legend(fontsize=9)
-    plt.suptitle("Реальная цена (серый) vs предсказания модели (синий)", y=1.05)
+    plt.suptitle("Реальная цена (серый) vs предсказания модели (синий) — это про форму "
+                 "распределения ответов, не про ошибку модели (MAPE смотрите в разделе выше)", y=1.05)
     plt.tight_layout()
     plt.show()
 
