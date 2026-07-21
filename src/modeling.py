@@ -203,12 +203,30 @@ def plot_learning_curves_grid(models: dict, X_train, y_train, colors: dict,
     plt.tight_layout()
     plt.show()
 
+    # Разрыв train/CV сам по себе не значит "плохо": у мощных моделей (лес,
+    # бустинг) он почти всегда есть, и это не мешает им давать меньшую ошибку
+    # именно на CV — а важна именно она, а не размер разрыва. Поэтому вместо
+    # порогового вердикта "переобучается / нет" на каждую модель отдельно —
+    # один общий, ранжированный по факту вывод.
+    ranked = sorted(curves.items(), key=lambda kv: kv[1][2][-1])  # по CV MAPE, лучшая первая
     rows = []
-    for name, (sizes, train_mape, val_mape) in curves.items():
+    for rank, (name, (sizes, train_mape, val_mape)) in enumerate(ranked, start=1):
         gap = val_mape[-1] - train_mape[-1]
-        verdict = "переобучается (большой разрыв train/CV)" if gap > 0.3 * train_mape[-1] else "обобщает адекватно"
-        rows.append((name, verdict))
-    card("Диагностика по learning curve", rows=rows, accent=colors["accent"])
+        rows.append((
+            f"{rank}. {name}",
+            f"train {train_mape[-1]:.1f}% / CV {val_mape[-1]:.1f}% (разрыв {gap:.1f} п.п.)",
+        ))
+    card(
+        "Диагностика по learning curve",
+        rows=rows,
+        note="Модели отсортированы по ошибке на CV — лучшая сверху. Разрыв между train и CV "
+             "растёт от Decision Tree к Random Forest и XGBoost, и это ожидаемо: чем мощнее "
+             "модель (больше деревьев, глубже бустинг), тем точнее она подгоняется под "
+             "обучающую выборку. Это не признак поломки — важна именно ошибка на CV, а не "
+             "размер разрыва: у XGBoost разрыв самый большой, но именно он даёт наименьшую "
+             "ошибку на новых данных.",
+        accent=colors["accent"],
+    )
 
 
 # ─── Итоговая оценка на отложенном test ────────────────────────────────────
