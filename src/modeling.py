@@ -230,50 +230,17 @@ def plot_learning_curves_grid(models: dict, X_train, y_train, colors: dict,
 
 
 # ─── Итоговая оценка на отложенном test ────────────────────────────────────
+# Без карточки-баннера: MAPE каждой модели уже показан один раз, в общей
+# таблице раздела "Сравнение по метрике" ниже — второй, промежуточный вывод
+# того же числа только путал бы аудиторию.
 
-def evaluate_model(model, X_test, y_test, name: str, colors: dict) -> dict:
+def evaluate_model(model, X_test, y_test, name: str) -> dict:
     pred_log = model.predict(X_test)
     y_real, pred_real = np.expm1(y_test), np.expm1(pred_log)
-
-    metrics = {
+    return {
         "name": name,
         "mape": mean_absolute_percentage_error(y_real, pred_real) * 100,
     }
-
-    card(
-        f"{name}: итоговая метрика на test",
-        rows=[("MAPE", f"{metrics['mape']:.1f}%")],
-        note="MAPE — средняя ошибка модели в процентах от реальной цены: "
-             "«в среднем модель промахивается на N% от того, сколько квартира стоит на самом деле». ",
-        accent=colors["primary"],
-    )
-    return metrics
-
-
-# ─── Как на самом деле выглядят предсказания деревьев (не как в линейной регрессии) ─
-
-def plot_predictions_grid(models: dict, X_test, y_test, colors: dict) -> None:
-    y_real = np.expm1(y_test)
-    preds = {name: np.expm1(model.predict(X_test)) for name, model in models.items()}
-
-    all_vals = np.concatenate([y_real.values] + list(preds.values()))
-    bins = np.linspace(all_vals.min(), all_vals.max(), 60)
-
-    fig, axes = plt.subplots(1, len(models), figsize=(6 * len(models), 4.5), sharey=True)
-    axes = np.atleast_1d(axes)
-    for ax, (name, pred_real) in zip(axes, preds.items()):
-        ax.hist(y_real, bins=bins, color=colors["neutral"], alpha=0.5, label="Реальная цена")
-        ax.hist(pred_real, bins=bins, color=colors["primary"], alpha=0.6, label="Предсказание модели")
-        n_unique = len(np.unique(np.round(pred_real, 0)))
-        pct_unique = n_unique / len(pred_real) * 100
-        ax.set_title(f"{name}\n{n_unique:,} уникальных предсказаний из {len(pred_real):,} ({pct_unique:.0f}%)"
-                     .replace(",", " "), fontsize=10.5, fontweight="bold")
-        ax.set_xlabel("Цена/м²")
-    axes[0].set_ylabel("Количество объектов")
-    axes[0].legend(fontsize=9)
-    plt.suptitle("Реальная цена (серый) vs предсказания модели (синий)", y=1.05)
-    plt.tight_layout()
-    plt.show()
 
 
 # ─── Сравнение моделей и выбор лучшей ──────────────────────────────────────
